@@ -1,0 +1,9 @@
+# 通过"--config" 传递文件内容
+apiVersion: kubescheduler.config.k8s.io/v1alpha1
+kind: KubeSchedulerConfiguration
+clientConnection:
+  kubeconfig: "/etc/kubernetes/scheduler.conf"
+algorithmSource:
+  policy:
+    file:
+      path: "/etc/kubernetes/scheduler-extender-policy.yaml"  # 指定自定义调度策略文件
