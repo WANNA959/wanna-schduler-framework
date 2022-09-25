@@ -209,8 +209,8 @@ spec:
       containers:
         - name: wanna-scheduler
           image: wannazjx/wanna-scheduler:v1
-          imagePullPolicy: IfNotPresent
-#          imagePullPolicy: Always
+#          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           args:
             - wanna-scheduler
             - --config=/etc/kubernetes/scheduler-config.yaml
