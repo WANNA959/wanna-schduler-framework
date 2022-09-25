@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"k8s.io/component-base/cli"
 	"k8s.io/component-base/logs"
 	"k8s.io/kubernetes/cmd/kube-scheduler/app"
 	"math/rand"
@@ -20,9 +20,11 @@ func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
-	if err := command.Execute(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
+	//if err := command.Execute(); err != nil {
+	//	_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
+	//	os.Exit(1)
+	//}
+	code := cli.Run(command)
+	os.Exit(code)
 
 }

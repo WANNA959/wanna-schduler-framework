@@ -1,9 +1,223 @@
-# 通过"--config" 传递文件内容
-apiVersion: kubescheduler.config.k8s.io/v1alpha1
-kind: KubeSchedulerConfiguration
-clientConnection:
-  kubeconfig: "/etc/kubernetes/scheduler.conf"
-algorithmSource:
-  policy:
-    file:
-      path: "/etc/kubernetes/scheduler-extender-policy.yaml"  # 指定自定义调度策略文件
+# 1. 创建ClusterRole--wanna-scheduler-clusterrole
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: wanna-scheduler-clusterrole
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - endpoints
+      - events
+    verbs:
+      - create
+      - get
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - delete
+      - get
+      - list
+      - watch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - bindings
+      - pods/binding
+    verbs:
+      - create
+  - apiGroups:
+      - ""
+    resources:
+      - pods/status
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - replicationcontrollers
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apps
+      - extensions
+    resources:
+      - replicasets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - persistentvolumeclaims
+      - persistentvolumes
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - "storage.k8s.io"
+    resources:
+      - storageclasses
+      - csinodes
+      - csistoragecapacities
+      - csidrivers
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - "coordination.k8s.io"
+    resources:
+      - leases
+    verbs:
+      - create
+      - get
+      - list
+      - update
+  - apiGroups:
+      - "events.k8s.io"
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+      - update
+---
+# 2. 创建ServiceAccount--wanna-scheduler-sa
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wanna-scheduler-sa
+  namespace: kube-system
+---
+# 3. 创建ClusterRoleBinding--ServiceAccount绑定 名为wanna-scheduler-clusterrole的ClusterRole
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: wanna-scheduler-clusterrolebinding
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: wanna-scheduler-clusterrole
+subjects:
+  - kind: ServiceAccount
+    name: wanna-scheduler-sa
+    namespace: kube-system
+
+---
+# 4. 创建ConfigMap--scheduler-config.yaml 指定插件sample-plugin分别在PreFilter、Filter、PreBind 三个扩展点的启用
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scheduler-config
+  namespace: kube-system
+data:
+  scheduler-config.yaml: |
+    apiVersion: kubescheduler.config.k8s.io/v1
+    kind: KubeSchedulerConfiguration
+    parallelism: 8
+    leaderElection:
+      leaderElect: true
+      resourceName: wanna-scheduler
+      resourceNamespace: kube-system
+    profiles:
+      - schedulerName: wanna-scheduler
+        plugins:
+          filter:
+            enabled:
+            - name: "wanna-scheduler"
+          preBind:
+            enabled:
+            - name: "wanna-scheduler"
+        pluginConfig:
+        - name: "wanna-scheduler"
+          args:
+            favorite_color: "#326CE5"
+            favorite_number: 7
+            thanks_to: "thockin"
+---
+# 5. 部署自定义插件（Deployment方式）
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wanna-scheduler
+  namespace: kube-system
+  labels:
+    component: wanna-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: wanna-scheduler
+  template:
+    metadata:
+      labels:
+        component: wanna-scheduler
+    spec:
+      serviceAccount: wanna-scheduler-sa
+      # 要将 Pod 标记为关键性（critical），设置 Pod 的 priorityClassName 为 system-cluster-critical 或者 system-node-critical。
+      # system-node-critical 是最高级别的可用性优先级，甚至比 system-cluster-critical 更高。
+      priorityClassName: system-cluster-critical
+      volumes:
+        - name: scheduler-config
+          configMap:
+            name: scheduler-config
+      containers:
+        - name: wanna-scheduler
+          image: wannazjx/wanna-scheduler:v1
+          imagePullPolicy: IfNotPresent
+#          imagePullPolicy: Always
+          args:
+            - wanna-scheduler
+            - --config=/etc/kubernetes/scheduler-config.yaml
+            - --v=3
+          resources:
+            requests:
+              cpu: "50m"
+          volumeMounts:
+            - name: scheduler-config
+              mountPath: /etc/kubernetes

@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"context"
 	"fmt"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -22,21 +23,27 @@ type Sample struct {
 	handle framework.Handle
 }
 
+var _ framework.FilterPlugin = &Sample{}
+var _ framework.PreBindPlugin = &Sample{}
+
 func (s *Sample) Name() string {
 	return Name
 }
 
-func (s *Sample) PreFilter(pc *framework.Plugin, pod *v1.Pod) *framework.Status {
-	klog.V(3).Infof("prefilter pod: %v", pod.Name)
+// PreFilter(ctx context.Context, state *CycleState, p *v1.Pod) (*PreFilterResult, *Status)
+//func (s *Sample) PreFilter(ctx context.Context, state *framework.CycleState, pod *v1.Pod) (*framework.PreFilterResult, *framework.Status) {
+//	klog.V(3).Infof("prefilter pod: %v", pod.Name)
+//	return framework.NewStatus(framework.Success, "")
+//}
+
+// Filter(ctx context.Context, state *CycleState, pod *v1.Pod, nodeInfo *NodeInfo) *Status
+func (s *Sample) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
+	klog.V(3).Infof("filter pod: %v, node: %v", pod.Name, nodeInfo.Node().Name)
 	return framework.NewStatus(framework.Success, "")
 }
 
-func (s *Sample) Filter(pc *framework.Plugin, pod *v1.Pod, nodeName string) *framework.Status {
-	klog.V(3).Infof("filter pod: %v, node: %v", pod.Name, nodeName)
-	return framework.NewStatus(framework.Success, "")
-}
-
-func (s *Sample) PreBind(pc *framework.Plugin, pod *v1.Pod, nodeName string) *framework.Status {
+// PreBind(ctx context.Context, state *CycleState, p *v1.Pod, nodeName string) *Status
+func (s *Sample) PreBind(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) *framework.Status {
 	nodeInfo, error := s.handle.SnapshotSharedLister().NodeInfos().Get(nodeName)
 	if error != nil {
 		return framework.NewStatus(framework.Error, fmt.Sprintf("prebind get node info error: %+v", nodeName))
@@ -48,9 +55,9 @@ func (s *Sample) PreBind(pc *framework.Plugin, pod *v1.Pod, nodeName string) *fr
 // func(configuration runtime.Object, f framework.Handle) (framework.Plugin, error)
 func New(configuration runtime.Object, f framework.Handle) (framework.Plugin, error) {
 	args := &Args{}
-	fmt.Println(configuration)
-	configuration.GetObjectKind()
-	klog.Infof("configuration %s", configuration)
+	instance := configuration.DeepCopyObject()
+	klog.Infof("configuration str %+v", configuration)
+	klog.Infof("instance str %+v", instance)
 	//if err := framework.DecodeInto(configuration, args); err != nil {
 	//	return nil, err
 	//}
